@@ -1,0 +1,12 @@
+# Local Claude Code state
+.claude/
+.claude-docker-auth/
+
+# Local env
+.env
+
+# Default workspace mount if created locally
+workspace/
+
+# OS noise
+.DS_Store

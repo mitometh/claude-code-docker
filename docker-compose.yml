@@ -1,0 +1,29 @@
+services:
+  claude:
+    build:
+      context: .
+      args:
+        USER_UID: "${UID:-1000}"
+        USER_GID: "${GID:-1000}"
+    image: claude-code:local
+    stdin_open: true
+    tty: true
+    environment:
+      - TERM=xterm-256color
+      - CLAUDE_CONFIG_DIR=/home/claude/.claude
+    volumes:
+      # Project folder — edits here affect your host folder.
+      - ${WORKSPACE:-./workspace}:/workspace
+      # Persistent subscription login (kept OUTSIDE the project).
+      - ${CLAUDE_DOCKER_AUTH_DIR:-~/.claude-docker-auth}:/home/claude/.claude
+    working_dir: /workspace
+    user: "${UID:-1000}:${GID:-1000}"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 4g
+    pids_limit: 512
