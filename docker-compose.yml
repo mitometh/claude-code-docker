@@ -21,6 +21,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=256m
+      - /home/claude/.npm:size=256m
+      - /home/claude/.cache:size=256m
     security_opt:
       - no-new-privileges:true
     cap_drop:

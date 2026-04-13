@@ -95,6 +95,21 @@ docker rmi claude-code:local
 
 To pin a specific version, edit the `CLAUDE_VERSION` arg in `Dockerfile` (defaults to `latest`).
 
+## MCP servers
+
+You can install MCP servers the normal way; their config is stored in the persisted auth dir and survives restarts:
+
+```bash
+# inside the container
+claude mcp add <name> -- npx -y @some/mcp-server
+```
+
+- HTTP/SSE servers work out of the box.
+- Stdio servers launched via `npx` / `uvx` work because the container provides writable tmpfs for `~/.npm` and `~/.cache`.
+- Globally pre-installed servers: add them to the `Dockerfile` (e.g. `RUN npm install -g @modelcontextprotocol/server-filesystem`) since the root filesystem is read-only at runtime.
+
+Any MCP server you add runs inside the container with the same limited access as Claude — only `/workspace` and the internet. Host credentials are not available by design.
+
 ## Troubleshooting
 
 **"GID already exists" during build** — on macOS, your group (`staff`, GID 20) may collide with a base-image group. The Dockerfile already handles this by reusing the existing GID.

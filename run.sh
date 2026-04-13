@@ -26,6 +26,8 @@ docker run --rm -it \
   --user "$(id -u):$(id -g)" \
   --read-only \
   --tmpfs /tmp:size=256m \
+  --tmpfs /home/claude/.npm:size=256m \
+  --tmpfs /home/claude/.cache:size=256m \
   --security-opt no-new-privileges \
   --cap-drop ALL \
   --pids-limit 512 \
