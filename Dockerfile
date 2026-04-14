@@ -1,4 +1,4 @@
-FROM node:current-trixie
+FROM node:22-bookworm
 
 # ---------- Build args ----------
 ARG CLAUDE_VERSION=latest
@@ -17,6 +17,8 @@ ENV CLAUDE_CONFIG_DIR=/home/claude/.claude \
     GOPATH=/home/claude/go \
     CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
     PATH=/usr/local/go/bin:/home/claude/go/bin:/usr/local/cargo/bin:$PATH
 
 # ---------- Base apt packages (always) ----------
