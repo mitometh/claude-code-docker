@@ -2,129 +2,99 @@
 
 Run [Claude Code](https://docs.claude.com/en/docs/claude-code) inside a locked-down Docker container.
 
-- Edits only affect the project folder you mount — nothing else on your host.
-- No SSH keys, no `~/.gitconfig`, no host env vars, no API key leak in.
-- Your subscription login is persisted in a dedicated host folder, so you only `/login` once.
-
-## Why
-
-Running an autonomous coding agent directly on your machine gives it access to every credential in your shell env, your SSH keys, your AWS config, every repo on disk, etc. This setup confines Claude Code to a single directory and a single auth folder.
+- Edits only affect the project folder you mount.
+- No SSH keys, `~/.gitconfig`, host env vars, or API keys leak in.
+- Subscription login is persisted on the host — `/login` once.
 
 ## Requirements
 
-- Docker (Desktop on macOS/Windows, or Engine on Linux)
-- A Claude subscription (Pro / Max) — no API key needed
+- Docker
+- A Claude subscription (Pro / Max)
 
 ## Quick start
 
 ```bash
 git clone <this-repo> claude-docker
 cd claude-docker
+cp .env.example .env          # optional: enable Go/Python/Rust, pin version
 chmod +x run.sh
 
-# Point at any project directory you want Claude to work on:
 ./run.sh /path/to/your/project
 ```
 
-First time only: inside Claude, run `/login` and complete the subscription flow in your browser. The session is saved to `~/.claude-docker-auth` on your host and reused automatically next time.
+First run: inside Claude, run `/login`. The session is saved to `~/.claude-docker-auth` and reused next time.
 
-If you omit the path, the current directory is used:
+Omit the path to use the current directory:
 
 ```bash
-cd /path/to/your/project
-/path/to/claude-docker/run.sh
+cd /path/to/project && /path/to/claude-docker/run.sh
 ```
 
-## What gets mounted into the container
-
-| Host path | Container path | Purpose |
-|---|---|---|
-| `<your project>` | `/workspace` | Read/write. Edits land on your host. |
-| `~/.claude-docker-auth` | `/home/claude/.claude` | Persistent subscription login + Claude Code state. |
-
-That's it. No other host paths are visible inside the container.
-
-## Sandbox hardening applied
-
-- Non-root user matching your host UID/GID (files you create are owned by you)
-- `--read-only` root filesystem; only `/workspace` and `/tmp` (tmpfs) are writable
-- `--cap-drop ALL` and `--security-opt no-new-privileges`
-- `--env-file /dev/null` — no host environment variables forwarded
-- Memory and PID limits
-
-## Configuration
-
-Environment variables the launcher understands:
+## Configuration (`.env`)
 
 | Var | Default | Meaning |
 |---|---|---|
-| `CLAUDE_DOCKER_AUTH_DIR` | `~/.claude-docker-auth` | Where subscription tokens are stored on the host |
+| `CLAUDE_DOCKER_AUTH_DIR` | `~/.claude-docker-auth` | Host path for persistent login |
+| `WORKSPACE` | `./workspace` | Project path (docker compose only) |
+| `CLAUDE_VERSION` | `latest` | Claude Code npm version |
+| `WITH_GO` | `0` | Install latest Go |
+| `WITH_PYTHON` | `0` | Install Python 3 + pip + venv |
+| `WITH_RUST` | `0` | Install Rust (rustup, minimal) |
+| `WITH_BUILD_ESSENTIAL` | `0` | Install C toolchain |
+| `EXTRA_APT_PACKAGES` | — | Space-separated extra apt packages |
 
-### Using docker compose instead
+Changing toggles automatically triggers a rebuild (the image tag includes a hash of them).
+
+## Mounts
+
+| Host | Container | Purpose |
+|---|---|---|
+| `<project>` | `/workspace` | Read/write project files |
+| `$CLAUDE_DOCKER_AUTH_DIR` | `/home/claude/.claude` | Login + Claude state |
+| `$CLAUDE_DOCKER_AUTH_DIR/.config` | `/home/claude/.config/claude` | Extra Claude state |
+
+Nothing else from the host is visible inside the container.
+
+## Sandbox
+
+- Non-root user matching host UID/GID
+- `--read-only` root FS; only `/workspace`, `/tmp`, and a few caches (tmpfs) are writable
+- `--cap-drop ALL`, `--security-opt no-new-privileges`
+- `--env-file /dev/null` — no host env forwarded
+- Memory (4g) and PID (512) limits
+
+## docker compose
 
 ```bash
-# In the claude-docker directory:
-WORKSPACE=/path/to/your/project docker compose run --rm claude
+docker compose run --rm claude
 ```
 
-Compose reads the same `CLAUDE_DOCKER_AUTH_DIR` variable if you want to override the auth location.
-
-## Where are my credentials?
-
-On your host: `~/.claude-docker-auth/`
-
-Inside that folder after `/login`:
-
-- `.credentials.json` — OAuth tokens (sensitive; chmod 600)
-- `settings.json`, `projects/`, `todos/` — Claude Code local state
-
-To log out / wipe the saved session:
-
-```bash
-rm -rf ~/.claude-docker-auth
-```
-
-## Updating Claude Code
-
-Rebuild the image to pick up a newer version:
-
-```bash
-docker rmi claude-code:local
-./run.sh /path/to/your/project   # rebuilds on next run
-```
-
-To pin a specific version, edit the `CLAUDE_VERSION` arg in `Dockerfile` (defaults to `latest`).
+Uses the same `.env`.
 
 ## MCP servers
-
-You can install MCP servers the normal way; their config is stored in the persisted auth dir and survives restarts:
 
 ```bash
 # inside the container
 claude mcp add <name> -- npx -y @some/mcp-server
 ```
 
-- HTTP/SSE servers work out of the box.
-- Stdio servers launched via `npx` / `uvx` work because the container provides writable tmpfs for `~/.npm` and `~/.cache`.
-- Globally pre-installed servers: add them to the `Dockerfile` (e.g. `RUN npm install -g @modelcontextprotocol/server-filesystem`) since the root filesystem is read-only at runtime.
+Config is stored in the persisted auth dir. HTTP/SSE and stdio (`npx`/`uvx`) servers work out of the box. For pre-installed servers, add a `RUN` line to the `Dockerfile`.
 
-Any MCP server you add runs inside the container with the same limited access as Claude — only `/workspace` and the internet. Host credentials are not available by design.
+## Logout / wipe
+
+```bash
+rm -rf ~/.claude-docker-auth
+```
 
 ## Troubleshooting
 
-**"GID already exists" during build** — on macOS, your group (`staff`, GID 20) may collide with a base-image group. The Dockerfile already handles this by reusing the existing GID.
-
-**Can't run `git push` / SSH from inside the container** — by design. SSH keys and git credentials are not mounted. Run git operations from your host terminal.
-
-**`/login` opens a URL but nothing happens** — copy the URL from the terminal into your host browser manually; the container has no browser.
+- **`/login` browser doesn't open** — copy the URL into your host browser; the container has none.
+- **Can't `git push`** — by design, SSH keys aren't mounted. Push from the host.
+- **GID collision on build** — handled automatically (existing GID reused).
 
 ## Security notes
 
-This is a reasonable sandbox, not a perfect one. It does not protect against:
-
-- Malicious code inside `/workspace` (you still chose to run the agent on that code)
-- Container escapes via kernel bugs (keep Docker updated)
-- Network-based exfiltration — the container has full outbound network. If you want to restrict it, add `--network none` to `run.sh`, but note Claude Code needs network to talk to Anthropic.
+Reasonable sandbox, not perfect. It does not protect against malicious code in `/workspace`, container escapes, or network exfiltration (outbound network is open — Claude needs it). Add `--network none` if you want to cut that.
 
 ## License
 
