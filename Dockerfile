@@ -59,10 +59,12 @@ RUN (getent group ${USER_GID} || groupadd --gid ${USER_GID} claude) \
  && echo "${user} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
  && mkdir -p /home/claude && chown ${USER_UID}:${USER_GID} /home/claude
 
-# ---------- Claude Code ----------
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
+# ---------- Claude Code (native installer) ----------
+ENV PATH=/home/claude/.local/bin:$PATH
 
 USER claude
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- ${CLAUDE_VERSION}
+
 WORKDIR /workspace
 
 ENTRYPOINT ["claude"]
